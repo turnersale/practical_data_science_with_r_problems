@@ -1,0 +1,108 @@
+---
+title: "Advanced Methods Recreation"
+output: word_document
+---
+
+This is a recreation of the methods found in the "Practical Data Science with R" book. 
+
+##Random Forests Method
+
+Load data and create sets
+
+```{r}
+spamD <- read.table('G:/Shared drives/Sale/Escuela/Elmhurst_MSDS/MDS_556_analytical_methods/spamD.tsv',header = T, sep = '\t')
+spamTrain <-  subset(spamD, spamD$rgroup>=10)
+spamTest <- subset(spamD, spamD$rgroup<10)
+spamVars <- setdiff(colnames(spamD), list('rgoup','spam'))
+```
+
+Prep the model and train it
+
+```{r}
+library(randomForest)
+set.seed(105030)
+
+fmodel <- randomForest(x=spamTrain[, spamVars],
+                       y = spamTrain$spam,
+                       ntree = 100,
+                       nodesize = 7,
+                       importance = T
+                       )
+```
+
+Setup accuracy measures
+
+```{r}
+loglikelihood <- function(y, py) {
+  pysmooth <- ifelse(py==0, 1e-12,
+                  ifelse(py==1, 1-1e-12, py))
+  sum(y * log(pysmooth) + (1-y)*log(1 - pysmooth))
+}
+
+accuracyMeasures <- function(pred, truth, name="model") {
+  dev.norm <- -2*loglikelihood(as.numeric(truth), pred)/length(pred)
+  ctable <- table(truth=truth,
+                  pred=(pred>0.5))
+  accuracy <- sum(diag(ctable))/sum(ctable)
+  precision <- ctable[2,2]/sum(ctable[,2])
+  recall <- ctable[2,2]/sum(ctable[2,])
+  f1 <- precision*recall
+  data.frame(model=name, accuracy=accuracy, f1=f1, dev.norm)
+}
+```
+
+
+Test model accuracy
+
+```{r}
+accuracyMeasures(predict(fmodel,
+                         newdata = spamTrain[, spamVars],
+                         type = 'prob')[, 'spam'],
+                         spamTrain$spam=="spam",
+                         name = "random forest, train")
+
+accuracyMeasures(predict(fmodel,
+                         newdata = spamTest[, spamVars],
+                         type = 'prob')[, 'spam'],
+                         spamTest$spam=="spam",
+                         name = "random forest, train")
+```
+
+See which variables are important
+
+```{r}
+varImp <- importance(fmodel)
+varImp[1:10, ]
+```
+
+##Gam methods
+
+Prepare the example data
+
+```{r}
+set.seed(405060)
+x <- rnorm(1000)
+noise <- rnorm(1000, sd = 1.5)
+y <- 3*sin(2*x) + cos(0.75*x) - 1.5*(x^2) + noise
+select <- runif(1000)
+frame <- data.frame(y=y, x = x )
+train <- frame[select > 0.1,]
+test <- frame[select <= 0.1,]
+```
+
+Apply GAM model
+
+```{r}
+library(mgcv)
+glin.model <- gam(y~s(x), data = train)
+glin.model$converged
+```
+
+Summarize and view model
+
+```{r}
+summary(glin.model)
+resid.glin <- train$y-predict(glin.model)
+sqrt(mean(resid.glin^2))
+```
+
